@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游戏事件记录 · Game Event Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent: #7C5CFC;
+  --accent-glow: rgba(124, 92, 252, 0.5);
+  --green: #4ADE80;
+  --red: #F87171;
+  --yellow: #FACC15;
+  --radius: 8px;
+}
+
+html { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; font-size: 14px; line-height: 1.5; color: #E8E6F0; overflow-x: hidden; }
+body { min-height: 100vh; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(124,92,252,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(124,92,252,0.6); }
+
+/* Background layers */
+.bg-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+canvas#bg-canvas { z-index: 0; }
+#bg-image {
+  z-index: 1;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  display: none;
+}
+#bg-image.show { opacity: 0.15; display: block; }
+.bg-overlay { position: fixed; top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none; background: rgba(0,0,0,0.65); }
+
+.app { position: relative; z-index: 10; max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 14px; }
+.header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; text-shadow: 0 0 20px rgba(124,92,252,0.3); }
+.header h1 span { color: var(--accent); }
+
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.bg-upload-btn { position: relative; }
+.bg-upload-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.bg-upload-btn .btn-label { pointer-events: none; }
+
+.tabs { display: flex; gap: 3px; background: rgba(21,21,40,0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: var(--radius); padding: 3px; border: 1px solid rgba(124,92,252,0.15); }
+.tab-btn { padding: 7px 15px; border: none; background: transparent; color: #8B8AA8; font-size: 0.8125rem; cursor: pointer; border-radius: 6px; transition: all .25s cubic-bezier(.4,0,.2,1); font-family: inherit; white-space: nowrap; }
+.tab-btn:hover { color: #E8E6F0; background: rgba(124,92,252,0.1); }
+.tab-btn.active { background: var(--accent); color: #fff; box-shadow: 0 0 16px var(--accent-glow); }
+
+.section { display: none; animation: sectionIn .35s cubic-bezier(.4,0,.2,1); }
+.section.active { display: block; }
+@keyframes sectionIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.panel { background: rgba(21,21,40,0.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(124,92,252,0.12); border-radius: var(--radius); padding: 18px 22px; margin-bottom: 14px; transition: border-color .3s; }
+.panel:hover { border-color: rgba(124,92,252,0.25); }
+.panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.panel-header h2 { font-size: 0.9rem; font-weight: 600; }
+.panel-header .sub { font-size: 0.75rem; color: #555577; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid .full { grid-column: 1 / -1; }
+.form-group { display: flex; flex-direction: column; gap: 3px; }
+.form-group label { font-size: 0.7rem; font-weight: 600; color: #555577; text-transform: uppercase; letter-spacing: 0.05em; }
+.form-group input, .form-group select, .form-group textarea {
+  background: rgba(13,13,26,0.6);
+  border: 1px solid rgba(124,92,252,0.15);
+  border-radius: 6px;
+  color: #E8E6F0;
+  padding: 7px 10px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  transition: all .25s cubic-bezier(.4,0,.2,1);
+  backdrop-filter: blur(4px);
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 12px rgba(124,92,252,0.2); }
+.form-group textarea { resize: vertical; min-height: 52px; }
+select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B8AA8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 26px; }
+
+.type-input-row { display: flex; gap: 6px; align-items: flex-end; }
+.type-input-row .form-group { flex: 1; }
+
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border: none; border-radius: 6px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all .25s cubic-bezier(.4,0,.2,1); font-family: inherit; white-space: nowrap; position: relative; overflow: hidden; }
+.btn::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.08); opacity: 0; transition: opacity .2s; }
+.btn:hover::after { opacity: 1; }
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: #fff; box-shadow: 0 2px 12px rgba(124,92,252,0.3); }
+.btn-primary:hover { box-shadow: 0 4px 20px rgba(124,92,252,0.45); transform: translateY(-1px); }
+.btn-ghost { background: rgba(255,255,255,0.04); color: #8B8AA8; border: 1px solid rgba(124,92,252,0.15); }
+.btn-ghost:hover { color: #E8E6F0; border-color: rgba(124,92,252,0.35); background: rgba(124,92,252,0.08); }
+.btn-danger { background: transparent; color: var(--red); border: 1px solid transparent; }
+.btn-danger:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.2); }
+.btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+
+.actions { display: flex; gap: 8px; margin-top: 8px; }
+
+.filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.filter-bar input, .filter-bar select {
+  background: rgba(13,13,26,0.5); border: 1px solid rgba(124,92,252,0.15); border-radius: 6px;
+  color: #E8E6F0; padding: 5px 10px; font-size: 0.8125rem; font-family: inherit;
+  transition: all .25s cubic-bezier(.4,0,.2,1);
+}
+.filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 10px rgba(124,92,252,0.15); }
+.filter-bar select { padding-right: 24px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238B8AA8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; padding: 7px 10px; font-size: 0.65rem; font-weight: 600; color: #555577; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgba(124,92,252,0.1); white-space: nowrap; cursor: pointer; user-select: none; transition: color .2s; }
+th:hover { color: #8B8AA8; }
+td { padding: 7px 10px; border-bottom: 1px solid rgba(42,42,69,0.3); color: #8B8AA8; white-space: nowrap; transition: all .15s; }
+tr { transition: background .2s; }
+tr:hover td { background: rgba(124,92,252,0.05); color: #E8E6F0; }
+.type-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; font-weight: 700; }
+
+.empty-state { text-align: center; padding: 40px 20px; color: #555577; }
+.empty-state p { font-size: 0.85rem; }
+
+.stats-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat-card { background: rgba(21,21,40,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(124,92,252,0.12); border-radius: var(--radius); padding: 14px 16px; transition: all .3s cubic-bezier(.4,0,.2,1); }
+.stat-card:hover { border-color: rgba(124,92,252,0.3); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.stat-card .stat-label { font-size: 0.65rem; font-weight: 600; color: #555577; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+.stat-card .stat-value { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+
+.time-tabs { display: flex; gap: 3px; background: rgba(13,13,26,0.5); border-radius: var(--radius); padding: 2px; border: 1px solid rgba(124,92,252,0.12); }
+.time-btn { padding: 5px 12px; border: none; background: transparent; color: #555577; font-size: 0.75rem; cursor: pointer; border-radius: 6px; transition: all .25s cubic-bezier(.4,0,.2,1); font-family: inherit; }
+.time-btn:hover { color: #E8E6F0; }
+.time-btn.active { background: var(--accent); color: #fff; box-shadow: 0 0 12px var(--accent-glow); }
+
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.chart-panel { background: rgba(21,21,40,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(124,92,252,0.12); border-radius: var(--radius); padding: 18px; transition: border-color .3s; }
+.chart-panel:hover { border-color: rgba(124,92,252,0.25); }
+.chart-panel h3 { font-size: 0.8rem; font-weight: 600; margin-bottom: 12px; color: #8B8AA8; }
+
+.toast { position: fixed; bottom: 32px; right: 24px; background: rgba(21,21,40,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(124,92,252,0.25); border-radius: var(--radius); padding: 10px 18px; color: #E8E6F0; font-size: 0.8125rem; font-weight: 500; z-index: 100; opacity: 0; transform: translateY(12px) scale(0.96); transition: all .3s cubic-bezier(.4,0,.2,1); pointer-events: none; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.toast.show { opacity: 1; transform: translateY(0) scale(1); }
+
+@media (max-width: 768px) {
+  .app { padding: 16px 12px 40px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .stats-top { grid-template-columns: repeat(2, 1fr); }
+  .chart-row { grid-template-columns: 1fr; }
+  .header { flex-direction: column; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas" class="bg-layer"></canvas>
+<div id="bg-image" class="bg-layer"></div>
+<div class="bg-overlay"></div>
+
+<div class="app">
+  <div class="header">
+    <h1>游戏事件<span> · </span>记录</h1>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="bg-upload-btn">
+        <button class="btn btn-ghost btn-sm"><span class="btn-label">更换背景</span></button>
+        <input type="file" id="bg-file-input" accept="image/*" title="上传背景图片">
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="record">录入</button>
+        <button class="tab-btn" data-tab="history">历史</button>
+        <button class="tab-btn" data-tab="stats">统计</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="section active" id="sec-record">
+    <div class="panel">
+      <div class="panel-header"><h2>新增事件</h2><span class="sub" id="event-count">共 0 条</span></div>
+      <form id="event-form" autocomplete="off">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>游戏名称（选填）</label>
+            <input type="text" id="f-game" placeholder="如：魔兽世界、原神...">
+          </div>
+          <div class="form-group">
+            <label>事件时间</label>
+            <input type="datetime-local" id="f-time" required>
+          </div>
+          <div class="form-group">
+            <label>事件类型</label>
+            <select id="f-type" required></select>
+          </div>
+          <div class="form-group type-input-row" style="align-items:flex-end">
+            <div class="form-group" style="flex:1">
+              <label>新建类型</label>
+              <input type="text" id="f-new-type" placeholder="输入新类型名称...">
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-add-type">添加</button>
+          </div>
+          <div class="form-group full">
+            <label>事件描述</label>
+            <input type="text" id="f-event" placeholder="描述发生了什么..." required>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button type="submit" class="btn btn-primary">保存事件</button>
+          <button type="button" class="btn btn-ghost" id="btn-clear">重置</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="section" id="sec-history">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>事件列表</h2>
+        <div class="actions">
+          <button class="btn btn-ghost btn-sm" id="btn-export">导出</button>
+          <button class="btn btn-ghost btn-sm" id="btn-import">导入</button>
+          <input type="file" id="import-file" accept=".json" style="display:none">
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="filter-search" placeholder="搜索...">
+        <select id="filter-type"><option value="">全部类型</option></select>
+        <select id="filter-game"><option value="">全部游戏</option></select>
+      </div>
+      <div class="table-wrap" id="history-table"></div>
+    </div>
+  </section>
+
+  <section class="section" id="sec-stats">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>数据统计</h2>
+        <div class="time-tabs" id="time-tabs">
+          <button class="time-btn active" data-range="day">日</button>
+          <button class="time-btn" data-range="week">周</button>
+          <button class="time-btn" data-range="month">月</button>
+          <button class="time-btn" data-range="year">年</button>
+          <button class="time-btn" data-range="all">全部</button>
+        </div>
+      </div>
+      <div class="stats-top" id="stats-top"></div>
+      <div class="chart-row">
+        <div class="chart-panel" id="panel-pie"><h3>事件类型分布</h3><div style="max-width:320px;margin:0 auto"><canvas id="chart-pie"></canvas></div></div>
+        <div class="chart-panel" id="panel-game"><h3>游戏分布</h3><div style="max-width:320px;margin:0 auto"><canvas id="chart-game"></canvas></div></div>
+      </div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// === Canvas Background ===
+(function() {
+  const c = document.getElementById('bg-canvas');
+  const ctx = c.getContext('2d');
+  let w, h, particles = [];
+
+  function resize() { w = c.width = window.innerWidth; h = c.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', () => { resize(); initParticles(); });
+
+  const palettes = [
+    ['#7C5CFC','#4ADE80','#38BDF8','#7C5CFC'],
+    ['#F87171','#FB923C','#FACC15','#F87171'],
+    ['#38BDF8','#7C5CFC','#A78BFA','#38BDF8'],
+  ];
+  let palette = palettes[0];
+  let paletteTarget = palettes[0];
+  let paletteTimer = 0;
+
+  function initParticles() {
+    particles = [];
+    const count = Math.floor(w * h / 12000);
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: Math.random() * w, y: Math.random() * h,
+        r: Math.random() * 1.5 + 0.5,
+        vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+        color: palette[Math.floor(Math.random() * palette.length)],
+        alpha: Math.random() * 0.5 + 0.2,
+        pulse: Math.random() * Math.PI * 2, pulseSpeed: Math.random() * 0.02 + 0.005
+      });
+    }
+  }
+  initParticles();
+
+  function lerpColor(a, b, t) {
+    const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+    const ar = (ah>>16)&255, ag = (ah>>8)&255, ab = ah&255;
+    const br = (bh>>16)&255, bg = (bh>>8)&255, bb = bh&255;
+    return '#' + ((1<<24)|(Math.round(ar+(br-ar)*t)<<16)|(Math.round(ag+(bg-ag)*t)<<8)|Math.round(ab+(bb-ab)*t)).toString(16).slice(1);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    paletteTimer++;
+    if (paletteTimer > 600) { paletteTimer = 0; paletteTarget = palettes[Math.floor(Math.random() * palettes.length)]; }
+    const t = Math.min(1, paletteTimer / 150);
+    palette = palette.map((c, i) => lerpColor(c, paletteTarget[i], t));
+
+    ctx.strokeStyle = 'rgba(124,92,252,0.03)';
+    ctx.lineWidth = 0.5;
+    for (let x = 60; x < w; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = 60; y < h; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < -10) p.x = w + 10; if (p.x > w + 10) p.x = -10;
+      if (p.y < -10) p.y = h + 10; if (p.y > h + 10) p.y = -10;
+      p.pulse += p.pulseSpeed;
+      const alpha = p.alpha + Math.sin(p.pulse) * 0.15;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0.05, alpha); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0.01, alpha * 0.2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// === Background Image Upload ===
+const BG_KEY = 'gevt-bg-image';
+(function() {
+  const bgDiv = document.getElementById('bg-image');
+  const fileInput = document.getElementById('bg-file-input');
+
+  // Load saved bg
+  const saved = localStorage.getItem(BG_KEY);
+  if (saved) {
+    bgDiv.style.backgroundImage = 'url(' + saved + ')';
+    bgDiv.classList.add('show');
+  }
+
+  fileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const dataUrl = ev.target.result;
+      bgDiv.style.backgroundImage = 'url(' + dataUrl + ')';
+      bgDiv.classList.add('show');
+      try { localStorage.setItem(BG_KEY, dataUrl); } catch(ex) {
+        // Image too large for localStorage, just display it
+        localStorage.removeItem(BG_KEY);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+})();
+
+// === App Logic ===
+const STORAGE_KEY = 'gevt-events';
+const TYPES_KEY = 'gevt-types';
+let events = [];
+let customTypes = [];
+let currentRange = 'day';
+let sortCol = 'time';
+let sortDir = 'desc';
+let pieChart = null;
+let gameChart = null;
+const CHART_COLORS = ['#7C5CFC','#4ADE80','#F87171','#38BDF8','#FACC15','#FB923C','#A78BFA','#34D399','#FDA4AF','#7DD3FC','#FDE047','#FDBA74'];
+
+function load() {
+  try { events = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { events = []; }
+  try { customTypes = JSON.parse(localStorage.getItem(TYPES_KEY)) || []; } catch(e) { customTypes = []; }
+  if (customTypes.length === 0) customTypes = ['稀有掉落','Boss击杀','成就解锁','PVP胜利','任务完成','Bug遭遇'];
+  customTypes = [...new Set(customTypes)];
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); }
+function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(customTypes)); }
+
+function populateSelects() {
+  customTypes = [...new Set(customTypes)];
+  ['f-type','filter-type'].forEach(id => {
+    const sel = document.getElementById(id); if (!sel) return;
+    sel.innerHTML = '<option value="">选择类型...</option>';
+    customTypes.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o); });
+  });
+  const fg = document.getElementById('filter-game');
+  if (fg) {
+    const games = [...new Set(events.map(e => e.game).filter(Boolean))];
+    fg.innerHTML = '<option value="">全部游戏</option>';
+    games.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; fg.appendChild(o); });
+  }
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  const btn = document.querySelector('[data-tab="' + name + '"]');
+  if (btn) btn.classList.add('active');
+  if (name === 'history') renderHistory();
+  if (name === 'stats') renderStats();
+}
+
+document.getElementById('event-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const evt = {
+    id: Date.now(),
+    time: document.getElementById('f-time').value,
+    game: document.getElementById('f-game').value.trim(),
+    type: document.getElementById('f-type').value,
+    event: document.getElementById('f-event').value.trim()
+  };
+  if (!evt.time) { toast('请选择时间'); return; }
+  if (!evt.type) { toast('请选择事件类型'); return; }
+  if (!evt.event) { toast('请填写事件描述'); return; }
+  events.unshift(evt);
+  save();
+  toast('事件已保存');
+  document.getElementById('event-form').reset();
+  document.getElementById('f-time').value = new Date().toISOString().slice(0,16);
+  populateSelects();
+  updateCount();
+});
+
+document.getElementById('btn-add-type').addEventListener('click', function() {
+  const inp = document.getElementById('f-new-type');
+  const val = inp.value.trim();
+  if (!val) return;
+  if (customTypes.includes(val)) { toast('类型已存在'); return; }
+  customTypes.push(val);
+  saveTypes(); populateSelects();
+  document.getElementById('f-type').value = val;
+  inp.value = '';
+  toast('类型已添加');
+});
+
+document.getElementById('btn-clear').addEventListener('click', function() {
+  document.getElementById('event-form').reset();
+  document.getElementById('f-time').value = new Date().toISOString().slice(0,16);
+});
+
+function getFiltered() {
+  const s = document.getElementById('filter-search').value.toLowerCase();
+  const t = document.getElementById('filter-type').value;
+  const g = document.getElementById('filter-game').value;
+  return events.filter(e => {
+    if (s && !e.event.toLowerCase().includes(s) && !e.game.toLowerCase().includes(s) && !e.type.toLowerCase().includes(s)) return false;
+    if (t && e.type !== t) return false;
+    if (g && e.game !== g) return false;
+    return true;
+  });
+}
+
+function formatTime(ts) { return ts.replace('T',' '); }
+
+function renderHistory() {
+  let filtered = getFiltered();
+  updateCount(filtered);
+  if (filtered.length === 0) {
+    document.getElementById('history-table').innerHTML = '<div class="empty-state"><p>暂无事件，去录入第一条吧</p></div>';
+    return;
+  }
+  filtered = [...filtered].sort((a,b) => {
+    const va = sortCol === 'game' ? (a.game||'') : sortCol === 'type' ? a.type : a.time;
+    const vb = sortCol === 'game' ? (b.game||'') : sortCol === 'type' ? b.type : b.time;
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const arrows = { asc: ' \u2191', desc: ' \u2193' };
+  function th(c,l) { return '<th data-col="'+c+'">'+l+(sortCol===c?arrows[sortDir]:'')+'</th>'; }
+
+  let h = '<table><thead><tr>';
+  h += th('time','时间');
+  h += th('game','游戏');
+  h += th('type','类型');
+  h += '<th>事件</th>';
+  h += '<th></th>';
+  h += '</tr></thead><tbody>';
+  filtered.forEach(e => {
+    h += '<tr>';
+    h += '<td style="color:#E8E6F0">'+formatTime(e.time)+'</td>';
+    h += '<td>'+(e.game||'-')+'</td>';
+    h += '<td><span class="type-badge" style="background:rgba(124,92,252,0.15);color:var(--accent)">'+e.type+'</span></td>';
+    h += '<td style="color:#E8E6F0;max-width:240px;overflow:hidden;text-overflow:ellipsis">'+e.event+'</td>';
+    h += '<td><button class="btn btn-danger btn-sm" data-del="'+e.id+'">删除</button></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  document.getElementById('history-table').innerHTML = h;
+}
+
+document.getElementById('history-table').addEventListener('click', function(e) {
+  const th = e.target.closest('th');
+  if (th && th.dataset.col) {
+    if (sortCol === th.dataset.col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    else { sortCol = th.dataset.col; sortDir = 'desc'; }
+    renderHistory();
+  }
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    const id = parseInt(del.dataset.del);
+    events = events.filter(e => e.id !== id);
+    save(); populateSelects(); renderHistory(); updateCount();
+    toast('已删除');
+  }
+});
+
+['filter-search','filter-type','filter-game'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) { el.addEventListener('input', renderHistory); el.addEventListener('change', renderHistory); }
+});
+
+function getRangeEvents(range) {
+  const now = new Date();
+  let since;
+  switch(range) {
+    case 'day': since = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break;
+    case 'week': since = new Date(now.getTime() - 7*86400000); break;
+    case 'month': since = new Date(now.getTime() - 30*86400000); break;
+    case 'year': since = new Date(now.getTime() - 365*86400000); break;
+    default: return [...events];
+  }
+  return events.filter(e => new Date(e.time) >= since);
+}
+
+function groupBy(arr, key) {
+  const map = {};
+  arr.forEach(e => {
+    const v = e[key] || '(未填)';
+    map[v] = (map[v]||0) + 1;
+  });
+  return Object.entries(map).sort((a,b) => b[1]-a[1]);
+}
+
+function renderStats() {
+  const rangeEvents = getRangeEvents(currentRange);
+  if (rangeEvents.length === 0) {
+    document.getElementById('stats-top').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>该时间段暂无数据</p></div>';
+    if (pieChart) { pieChart.destroy(); pieChart = null; }
+    if (gameChart) { gameChart.destroy(); gameChart = null; }
+    return;
+  }
+
+  const types = groupBy(rangeEvents, 'type');
+  const top = types[0] ? types[0][0] : '-';
+  document.getElementById('stats-top').innerHTML =
+    '<div class="stat-card"><div class="stat-label">事件总数</div><div class="stat-value" style="color:var(--accent)">'+rangeEvents.length+'</div></div>'+
+    '<div class="stat-card"><div class="stat-label">事件类型</div><div class="stat-value" style="color:#4ADE80">'+types.length+'</div></div>'+
+    '<div class="stat-card"><div class="stat-label">最多类型</div><div class="stat-value" style="color:#FACC15">'+top+'</div></div>'+
+    '<div class="stat-card"><div class="stat-label">涉及游戏</div><div class="stat-value" style="color:#38BDF8">'+new Set(rangeEvents.map(e=>e.game||'(未填)')).size+'</div></div>';
+
+  if (pieChart) pieChart.destroy();
+  if (gameChart) gameChart.destroy();
+
+  const typeData = groupBy(rangeEvents, 'type');
+  const gameData = groupBy(rangeEvents, 'game');
+
+  const chartOpts = {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: { animateScale: true, animateRotate: true, duration: 600, easing: 'easeInOutQuart' },
+    plugins: { legend: { position: 'bottom', labels: { color: '#8B8AA8', font: { size: 11 }, padding: 16, usePointStyle: true } } }
+  };
+
+  pieChart = new Chart(document.getElementById('chart-pie'), {
+    type: 'doughnut',
+    data: {
+      labels: typeData.map(t=>t[0]),
+      datasets: [{ data: typeData.map(t=>t[1]), backgroundColor: typeData.map((_,i)=>CHART_COLORS[i%CHART_COLORS.length]), borderColor: 'rgba(21,21,40,0.5)', borderWidth: 2, hoverBorderColor: '#E8E6F0', hoverBorderWidth: 3 }]
+    },
+    options: chartOpts
+  });
+
+  gameChart = new Chart(document.getElementById('chart-game'), {
+    type: 'doughnut',
+    data: {
+      labels: gameData.map(t=>t[0]),
+      datasets: [{ data: gameData.map(t=>t[1]), backgroundColor: gameData.map((_,i)=>CHART_COLORS[(i+6)%CHART_COLORS.length]), borderColor: 'rgba(21,21,40,0.5)', borderWidth: 2, hoverBorderColor: '#E8E6F0', hoverBorderWidth: 3 }]
+    },
+    options: chartOpts
+  });
+}
+
+document.getElementById('time-tabs').addEventListener('click', function(e) {
+  const btn = e.target.closest('.time-btn');
+  if (!btn) return;
+  currentRange = btn.dataset.range;
+  document.querySelectorAll('#time-tabs .time-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderStats();
+});
+
+document.getElementById('btn-export').addEventListener('click', function() {
+  const blob = new Blob([JSON.stringify({events, customTypes}, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'game-events-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(url);
+  toast('已导出');
+});
+document.getElementById('btn-import').addEventListener('click', function() { document.getElementById('import-file').click(); });
+document.getElementById('import-file').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.events || !Array.isArray(data.events)) throw new Error();
+      events = [...data.events, ...events];
+      if (data.customTypes && Array.isArray(data.customTypes)) {
+        data.customTypes.forEach(t => { if (!customTypes.includes(t)) customTypes.push(t); });
+        saveTypes();
+      }
+      save(); populateSelects(); renderHistory(); updateCount();
+      toast('已导入 '+data.events.length+' 条');
+    } catch(err) { toast('导入失败：格式不正确'); }
+  };
+  reader.readAsText(file); e.target.value = '';
+});
+
+function updateCount(filtered) {
+  const n = filtered ? filtered.length : events.length;
+  document.getElementById('event-count').textContent = '共 '+n+' 条';
+}
+
+function init() {
+  load();
+  populateSelects();
+  document.getElementById('f-time').value = new Date().toISOString().slice(0,16);
+  updateCount();
+  document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', function() { switchTab(this.dataset.tab); }));
+}
+init();
+</script>
+</body>
+</html>
