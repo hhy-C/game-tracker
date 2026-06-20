@@ -183,7 +183,7 @@ tr:hover td { background: rgba(124,92,252,0.05); color: #E8E6F0; }
           </div>
           <div class="form-group">
             <label>事件时间</label>
-            <input type="datetime-local" id="f-time" required><div class="form-group"><label>发生场景</label><select id="f-scene" required></select></div><div class="form-group type-input-row" style="align-items:flex-end"><div class="form-group" style="flex:1"><label>新建场景</label><input type="text" id="f-new-scene" placeholder="输入新场景名称..."></div><button type="button" class="btn btn-ghost btn-sm" id="btn-add-scene">添加</button></div><div class="form-group"><label>发生场景</label><select id="f-scene" required></select></div><div class="form-group type-input-row" style="align-items:flex-end"><div class="form-group" style="flex:1"><label>新建场景</label><input type="text" id="f-new-scene" placeholder="输入新场景名称..."></div><button type="button" class="btn btn-ghost btn-sm" id="btn-add-scene">添加</button></div>
+            <input type="datetime-local" id="f-time" required><div class="form-group"><label>发生场景</label><select id="f-scene" required></select></div><div class="form-group type-input-row" style="align-items:flex-end"><div class="form-group" style="flex:1"><label>新建场景</label><input type="text" id="f-new-scene" placeholder="输入新场景名称..."></div><button type="button" class="btn btn-ghost btn-sm" id="btn-add-scene">添加</button></div><div class="form-group"><label>发生场景</label><select id="f-scene" required></select></div><div class="form-group type-input-row" style="align-items:flex-end"><div class="form-group" style="flex:1"><label>新建场景</label><input type="text" id="f-new-scene" placeholder="输入新场景名称..."></div><button type="button" class="btn btn-ghost btn-sm" id="btn-add-scene">添加</button></div><div class="form-group"><label>发生场景</label><select id="f-scene" required></select></div><div class="form-group type-input-row" style="align-items:flex-end"><div class="form-group" style="flex:1"><label>新建场景</label><input type="text" id="f-new-scene" placeholder="输入新场景名称..."></div><button type="button" class="btn btn-ghost btn-sm" id="btn-add-scene">添加</button></div>
           </div>
           <div class="form-group">
             <label>事件类型</label>
@@ -221,7 +221,7 @@ tr:hover td { background: rgba(124,92,252,0.05); color: #E8E6F0; }
       </div>
       <div class="filter-bar">
         <input type="text" id="filter-search" placeholder="搜索...">
-        <select id="filter-scene"><option value="">全部场景</option></select><select id="filter-scene"><option value="">全部场景</option></select><select id="filter-type"><option value="">全部类型</option></select>
+        <select id="filter-scene"><option value="">全部场景</option></select><select id="filter-scene"><option value="">全部场景</option></select><select id="filter-scene"><option value="">全部场景</option></select><select id="filter-type"><option value="">全部类型</option></select>
         <select id="filter-game"><option value="">全部游戏</option></select>
       </div>
       <div class="table-wrap" id="history-table"></div>
@@ -355,10 +355,12 @@ const BG_KEY = 'gevt-bg-image';
 // === App Logic ===
 const API_URL = ''; // Set to server URL to enable server sync
 const API_URL = ''; // Set to server URL to enable server sync
+const API_URL = ''; // Set to server URL to enable server sync
 const STORAGE_KEY = 'gevt-events';
 const TYPES_KEY = 'gevt-types';
 let events = [];
 let customTypes = [];
+let customScenes = [];
 let customScenes = [];
 let customScenes = [];
 let currentRange = 'day';
@@ -395,11 +397,26 @@ function load() {
     }).catch(()=>{});
   }
   
+  if (API_URL) {
+    fetch(API_URL + '/api/events').then(r=>r.json()).then(d=>{
+      if (Array.isArray(d)) { events = d;
+        const t = [...new Set(d.map(e=>e.type))];
+        const s = [...new Set(d.map(e=>e.scene))];
+        t.forEach(x=>{if(!customTypes.includes(x))customTypes.push(x)});
+        s.forEach(x=>{if(!customScenes.includes(x))customScenes.push(x)});
+        saveTypes(); saveScenes();
+        populateSelects(); updateCount();
+      }
+    }).catch(()=>{});
+  }
+  
   try { events = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { events = []; }
   try { customTypes = JSON.parse(localStorage.getItem(TYPES_KEY)) || []; }
   try { customScenes = JSON.parse(localStorage.getItem('gevt-scenes')) || []; } catch(f) { customScenes = []; }
+  try { customScenes = JSON.parse(localStorage.getItem('gevt-scenes')) || []; } catch(f) { customScenes = []; }
   try { customScenes = JSON.parse(localStorage.getItem('gevt-scenes')) || []; } catch(f) { customScenes = []; } catch(e) { customTypes = []; }
   if (customTypes.length === 0) customTypes = ['放鸽子','卖队友','ljhmjj'];
+  if (customScenes.length === 0) customScenes = ['瓦','cs','现实'];
   if (customScenes.length === 0) customScenes = ['瓦','cs','现实'];
   if (customScenes.length === 0) customScenes = ['瓦','cs','现实'];
   customTypes = [...new Set(customTypes)];
@@ -411,8 +428,15 @@ function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
 function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(customTypes)); }
 function saveScenes() { localStorage.setItem('gevt-scenes', JSON.stringify(customScenes)); }
 function saveScenes() { localStorage.setItem('gevt-scenes', JSON.stringify(customScenes)); }
+function saveScenes() { localStorage.setItem('gevt-scenes', JSON.stringify(customScenes)); }
 
 function populateSelects() {
+  customScenes = [...new Set(customScenes)];
+  ['f-scene','filter-scene'].forEach(id => {
+    const sel = document.getElementById(id); if (!sel) return;
+    sel.innerHTML = '<option value="">选择场景...</option>';
+    customScenes.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o); });
+  });
   customScenes = [...new Set(customScenes)];
   ['f-scene','filter-scene'].forEach(id => {
     const sel = document.getElementById(id); if (!sel) return;
@@ -467,6 +491,7 @@ document.getElementById('event-form').addEventListener('submit', function(e) {
   if (!evt.time) { toast('请选择时间'); return; }
     if (!evt.scene) { toast('请选择场景'); return; }
     if (!evt.scene) { toast('请选择场景'); return; }
+    if (!evt.scene) { toast('请选择场景'); return; }
   if (!evt.type) { toast('请选择事件类型'); return; }
   if (!evt.event) { toast('请填写事件描述'); return; }
   events.unshift(evt);
@@ -479,6 +504,17 @@ document.getElementById('event-form').addEventListener('submit', function(e) {
 });
 
 document.getElementById('btn-add-scene').addEventListener('click', function() {
+    const inp = document.getElementById('f-new-scene');
+    const val = inp.value.trim();
+    if (!val) return;
+    if (customScenes.includes(val)) { toast('场景已存在'); return; }
+    customScenes.push(val);
+    saveScenes(); populateSelects();
+    document.getElementById('f-scene').value = val;
+    inp.value = '';
+    toast('场景已添加');
+  });
+  document.getElementById('btn-add-scene').addEventListener('click', function() {
     const inp = document.getElementById('f-new-scene');
     const val = inp.value.trim();
     if (!val) return;
@@ -549,7 +585,7 @@ function renderHistory() {
   function th(c,l) { return '<th data-col="'+c+'">'+l+(sortCol===c?arrows[sortDir]:'')+'</th>'; }
 
   let h = '<table><thead><tr>';
-  h += th('time','时间');h += th('scene','场景');h += th('scene','场景');
+  h += th('time','时间');h += th('scene','场景');h += th('scene','场景');h += th('scene','场景');
   h += th('game','游戏');
   h += th('type','类型');
   h += '<th>事件</th>';
@@ -557,7 +593,7 @@ function renderHistory() {
   h += '</tr></thead><tbody>';
   filtered.forEach(e => {
     h += '<tr>';
-    h += '<td style="color:#E8E6F0">'+formatTime(e.time)+'</td>';h += '<td>'+(e.scene||'-')+'</td>';h += '<td>'+(e.scene||'-')+'</td>';
+    h += '<td style="color:#E8E6F0">'+formatTime(e.time)+'</td>';h += '<td>'+(e.scene||'-')+'</td>';h += '<td>'+(e.scene||'-')+'</td>';h += '<td>'+(e.scene||'-')+'</td>';
     h += '<td>'+(e.game||'-')+'</td>';
     h += '<td><span class="type-badge" style="background:rgba(124,92,252,0.15);color:var(--accent)">'+e.type+'</span></td>';
     h += '<td style="color:#E8E6F0;max-width:240px;overflow:hidden;text-overflow:ellipsis">'+e.event+'</td>';
@@ -579,6 +615,7 @@ document.getElementById('history-table').addEventListener('click', function(e) {
   if (del) {
     const id = parseInt(del.dataset.del);
     events = events.filter(e => e.id !== id);
+        if (API_URL) { try { fetch(API_URL + '/api/events/' + id, {method:'DELETE'}).catch(()=>{}); } catch(e) {} }
         if (API_URL) { try { fetch(API_URL + '/api/events/' + id, {method:'DELETE'}).catch(()=>{}); } catch(e) {} }
         if (API_URL) { try { fetch(API_URL + '/api/events/' + id, {method:'DELETE'}).catch(()=>{}); } catch(e) {} }
     save(); populateSelects(); renderHistory(); updateCount();
@@ -671,6 +708,14 @@ function renderStats() {
   // original gameChart replaced
     type: 'doughnut',
     data: {
+      labels: sceneData.map(t=>t[0]),
+      datasets: [{ data: sceneData.map(t=>t[1]), backgroundColor: sceneData.map((_,i)=>CHART_COLORS[(i+6)%CHART_COLORS.length]), borderColor: 'rgba(21,21,40,0.5)', borderWidth: 2, hoverBorderColor: '#E8E6F0', hoverBorderWidth: 3 }]
+    },
+    options: chartOpts
+  });
+  // original gameChart replaced
+    type: 'doughnut',
+    data: {
       labels: gameData.map(t=>t[0]),
       datasets: [{ data: gameData.map(t=>t[1]), backgroundColor: gameData.map((_,i)=>CHART_COLORS[(i+6)%CHART_COLORS.length]), borderColor: 'rgba(21,21,40,0.5)', borderWidth: 2, hoverBorderColor: '#E8E6F0', hoverBorderWidth: 3 }]
     },
@@ -704,6 +749,10 @@ document.getElementById('import-file').addEventListener('change', function(e) {
       const data = JSON.parse(ev.target.result);
       if (!data.events || !Array.isArray(data.events)) throw new Error();
       events = [...data.events, ...events];
+      if (data.customScenes && Array.isArray(data.customScenes)) {
+        data.customScenes.forEach(t => { if (!customScenes.includes(t)) customScenes.push(t); });
+        saveScenes();
+      }
       if (data.customScenes && Array.isArray(data.customScenes)) {
         data.customScenes.forEach(t => { if (!customScenes.includes(t)) customScenes.push(t); });
         saveScenes();
