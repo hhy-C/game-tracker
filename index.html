@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>游戏事件记录 · Game Event Tracker</title>
+<title>ljhmjj</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -158,7 +158,7 @@ tr:hover td { background: rgba(124,92,252,0.05); color: #E8E6F0; }
 
 <div class="app">
   <div class="header">
-    <h1>游戏事件<span> · </span>记录</h1>
+    <h1>ljhmjj</h1>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div class="bg-upload-btn">
         <button class="btn btn-ghost btn-sm"><span class="btn-label">更换背景</span></button>
@@ -367,7 +367,7 @@ const CHART_COLORS = ['#7C5CFC','#4ADE80','#F87171','#38BDF8','#FACC15','#FB923C
 function load() {
   try { events = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { events = []; }
   try { customTypes = JSON.parse(localStorage.getItem(TYPES_KEY)) || []; } catch(e) { customTypes = []; }
-  if (customTypes.length === 0) customTypes = ['稀有掉落','Boss击杀','成就解锁','PVP胜利','任务完成','Bug遭遇'];
+  if (customTypes.length === 0) customTypes = [];
   customTypes = [...new Set(customTypes)];
 }
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); }
